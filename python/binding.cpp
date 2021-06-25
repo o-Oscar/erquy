@@ -1,3 +1,6 @@
+#include "pinocchio/fwd.hpp"
+#include "eigenpy/eigenpy.hpp"
+
 #include <boost/python.hpp>
 #include <boost/python/list.hpp>
 #include <boost/python/extract.hpp>
@@ -10,11 +13,26 @@ using namespace boost::python;
 
 BOOST_PYTHON_MODULE(erquy_py) {
 	// Py_Initialize();
-	// boost::python::numpy::initialize();
+	boost::python::numpy::initialize();
+	eigenpy::enableEigenPy();
 
-	class_<erquy::World>("World", init<>())
+	class_<erquy::World>("World")
 		.def("loadUrdf", &erquy::World::loadUrdf)
-		// .def("setState", &erquy::World::setState)
+
+		// the almighty integrate step
 		.def("integrate", &erquy::World::integrate)
+
+		// --- getters and setters ---
+		.def("setState", &erquy::World::setState)
+		.def("getState", &erquy::World::getState)
+
+		.def("setTimeStep", &erquy::World::setTimeStep)
+		.def("getTimeStep", &erquy::World::getTimeStep)
+
+		.def("setERP", &erquy::World::setERP)
+		.def("getERP", &erquy::World::getERP)
+
+		.def("setGravity", &erquy::World::setGravity)
+		.def("getGravity", &erquy::World::getGravity)
 	;
 }

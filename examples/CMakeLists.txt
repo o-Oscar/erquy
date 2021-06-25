@@ -8,7 +8,7 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 
 
 # add the executables
-add_executable(first "first/main.cpp")
+# add_executable(first "first/main.cpp")
 
 
 # wierd that I have to do it multiple times

@@ -6,7 +6,7 @@ set(BUILD_VERSION 1.0)
 project(erquy VERSION ${BUILD_VERSION})
 
 # setting up boost and python
-	FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
+	FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX} numpy)
 	FIND_PACKAGE(PythonInterp 3)
 	FIND_PACKAGE(PythonLibs 3 REQUIRED)
 	# FIND_PACKAGE(Boost COMPONENTS numpy3 REQUIRED)
@@ -20,12 +20,13 @@ project(erquy VERSION ${BUILD_VERSION})
 	INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${PYTHON_INCLUDE_DIRS})
 	LINK_LIBRARIES(${Boost_LIBRARIES} ${PYTHON_LIBRARIES})
 
+if (ON)
 # add the core subdirectory
 add_subdirectory(core)
 
 # add the python bindings
 add_subdirectory(python)
-
+endif()
 
 
 if (OFF)

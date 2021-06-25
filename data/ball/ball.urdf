@@ -4,6 +4,9 @@
 	<material name="white">
 		<color rgba="1.0 1.0 1.0 1.0"/>
 	</material>
+	<material name="red">
+		<color rgba="1.0 0.2 0.2 1.0"/>
+	</material>
 	<material name="orange">
 		<color rgba="1.0 0.423529411765 0.0392156862745 1.0"/>
 	</material>
@@ -49,6 +52,27 @@
 				<sphere radius="1.0"/>
 			</geometry>
 			<material name="orange"/>
+		</visual>
+		<visual>
+			<origin rpy="0 0 0" xyz="0 0 1"/>
+			<geometry>
+				<sphere radius=".1"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<visual>
+			<origin rpy="0 0 0" xyz="0 1 0"/>
+			<geometry>
+				<sphere radius=".1"/>
+			</geometry>
+			<material name="red"/>
+		</visual>
+		<visual>
+			<origin rpy="0 0 0" xyz="1 0 0"/>
+			<geometry>
+				<sphere radius=".1"/>
+			</geometry>
+			<material name="red"/>
 		</visual>
 		<collision>
 			<origin rpy="0 0 0" xyz="0 0 0"/>
