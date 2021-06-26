@@ -57,8 +57,12 @@ namespace erquy {
 			real timeStep_ = 0.01;
 			real erp_ = 0.003; // Error reduction parameter : time constant for resolving penetration
 
+			// --- step realted ---
+			Eigen::VectorXd b;
+			Eigen::MatrixXd M;
+		
 			std::vector<Eigen::MatrixXd> all_jac_;
 			std::vector<Eigen::Vector3d> all_lamb_;
-		
+
 	};
 }
