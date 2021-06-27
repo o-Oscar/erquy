@@ -18,7 +18,7 @@
 	<joint name="ground" type="fixed">
 		<parent link="world"/>
 		<child link="ground"/>
-		<origin rpy="0.1 0. 0" xyz="0 0 -1"/>
+		<origin rpy="0. 0. 0" xyz="0 0 -1"/>
 	</joint>
 
 

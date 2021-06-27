@@ -49,5 +49,6 @@ BOOST_PYTHON_MODULE(erquy_py) {
 		.def("getGravity", &erquy::World::getGravity)
 
 		.def("getJacobians", range(&erquy::World::getJacB, &erquy::World::getJacE))
+		.def("getM", &erquy::World::getM)
 	;
 }

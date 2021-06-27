@@ -36,24 +36,28 @@ void World::integrate () {
 	pinocchio::forwardKinematics(model_, data_, q_, u_); // update every positions and velocities
 	pinocchio::updateFramePlacements(model_, data_);
 
-	// pinocchio::container::aligned_vector<ForceDerived> f_ext;
-	// for (int i(0); i < model_.njoints; i++) {
-	// 	f_ext.push_back(Eigen::VectorXd::Zero(3));
-	// }
-	// b = pinocchio::rnea(model_, data_, q_, u_, Eigen::VectorXd::Zero(model_.nv), f_ext); // computes the torques needed to track zero acceleration. Gravity is already included.
-	
 	b = pinocchio::rnea(model_, data_, q_, u_, Eigen::VectorXd::Zero(model_.nv)); // computes the torques needed to track zero acceleration
 	M = pinocchio::crba(model_, data_, q_); // computes the mass matrix
-	
+	// fucking pinocchio
+	M.triangularView<Eigen::StrictlyLower>() = M.transpose().triangularView<Eigen::StrictlyLower>();
+	/*
+	b = Eigen::VectorXd::Zero(model_.nv); // computes the torques needed to track zero acceleration
+	M = Eigen::MatrixXd::Identity(model_.nv, model_.nv); // computes the mass matrix*/
+	// std::cout << M << std::endl;
+
 	// calculate acceleration due to gravity
 	ag = Eigen::VectorXd::Zero(model_.nv);
 	// for (auto const & joint : model_.joints) {
+	
 	for (int i(0); i < model_.njoints; i++) {
 		if (model_.joints[i].nq() == 7 && model_.joints[i].nv() == 6) {
 			ag.segment<3>(model_.joints[i].idx_v()) = data_.oMi[i].rotation().transpose() * gravity_;
 		}
-	}
-
+	}/*
+	for (int i(0); i < model_.nframes; i++) {
+		std::cout << model_.frames[i] << std::endl;
+	}*/
+	
 	// finding all collisions
 	pinocchio::computeCollisions(model_, data_, geom_model_, geom_data_, q_);
 
@@ -106,6 +110,8 @@ void World::integrate () {
 	for (int i(0); i < all_jac_.size(); i++) {
 		full_tau += all_jac_[i].transpose() * all_lamb_[i];
 	}
+	// std::cout << "full_tau" << std::endl;
+	// std::cout << full_tau.transpose() << std::endl;
 	u_ += timeStep_ * ag + M.colPivHouseholderQr().solve(full_tau);
 	q_ = pinocchio::integrate(model_, q_, u_ * timeStep_);
 }
@@ -171,4 +177,8 @@ std::vector<Eigen::MatrixXd>::iterator World::getJacB ()
 std::vector<Eigen::MatrixXd>::iterator World::getJacE ()
 {
 	return all_jac_.end();
+}
+
+Eigen::MatrixXd World::getM () {
+	return M;
 }

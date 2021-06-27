@@ -55,6 +55,8 @@ namespace erquy {
 			std::vector<Eigen::MatrixXd>::iterator getJacB ();
 			std::vector<Eigen::MatrixXd>::iterator getJacE ();
 
+			Eigen::MatrixXd getM ();
+			
 			// std::vector<Eigen::MatrixXd>::iterator getLambB ();
 			// std::vector<Eigen::MatrixXd>::iterator getLambE ();
 
