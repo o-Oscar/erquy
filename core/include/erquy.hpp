@@ -16,6 +16,8 @@
 
 #include <iostream>
 
+#include "solver.hpp"
+
 namespace erquy {
 
 	typedef double real;
@@ -29,6 +31,15 @@ namespace erquy {
 			void integrate();
 
 			// --- getters and setters ---
+			int getGeneralizedCoordinateDim ();
+			int getGeneralizedVelocityDim ();
+
+			void setGeneralizedCoordinate (Eigen::VectorXd q);
+			Eigen::VectorXd getGeneralizedCoordinate ();
+
+			void setGeneralizedVelocity (Eigen::VectorXd u);
+			Eigen::VectorXd getGeneralizedVelocity ();
+
 			void setState (Eigen::VectorXd q, Eigen::VectorXd u);
 			boost::python::tuple getState ();
 
@@ -41,7 +52,11 @@ namespace erquy {
 			void setGravity (Eigen::Vector3d gravity);
 			Eigen::Vector3d getGravity ();
 
-			boost::python::tuple getStepInfo ();
+			std::vector<Eigen::MatrixXd>::iterator getJacB ();
+			std::vector<Eigen::MatrixXd>::iterator getJacE ();
+
+			// std::vector<Eigen::MatrixXd>::iterator getLambB ();
+			// std::vector<Eigen::MatrixXd>::iterator getLambE ();
 
 		private:
 
@@ -56,8 +71,10 @@ namespace erquy {
 
 			real timeStep_ = 0.01;
 			real erp_ = 0.003; // Error reduction parameter : time constant for resolving penetration
+			Eigen::Vector3d gravity_;
 
 			// --- step realted ---
+			Eigen::VectorXd ag;
 			Eigen::VectorXd b;
 			Eigen::MatrixXd M;
 		

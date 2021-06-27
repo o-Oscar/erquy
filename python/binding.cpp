@@ -23,6 +23,19 @@ BOOST_PYTHON_MODULE(erquy_py) {
 		.def("integrate", &erquy::World::integrate)
 
 		// --- getters and setters ---
+		.def("getGeneralizedCoordinateDim", &erquy::World::getGeneralizedCoordinateDim)
+		.def("getGeneralizedVelocityDim", &erquy::World::getGeneralizedVelocityDim)
+		.def("getDOF", &erquy::World::getGeneralizedVelocityDim)
+		.def("nq", &erquy::World::getGeneralizedCoordinateDim)
+		.def("nv", &erquy::World::getGeneralizedVelocityDim)
+
+
+		.def("setGeneralizedCoordinate", &erquy::World::setGeneralizedCoordinate)
+		.def("getGeneralizedCoordinate", &erquy::World::getGeneralizedCoordinate)
+
+		.def("setGeneralizedVelocity", &erquy::World::setGeneralizedVelocity)
+		.def("getGeneralizedVelocity", &erquy::World::getGeneralizedVelocity)
+		
 		.def("setState", &erquy::World::setState)
 		.def("getState", &erquy::World::getState)
 
@@ -34,5 +47,7 @@ BOOST_PYTHON_MODULE(erquy_py) {
 
 		.def("setGravity", &erquy::World::setGravity)
 		.def("getGravity", &erquy::World::getGravity)
+
+		.def("getJacobians", range(&erquy::World::getJacB, &erquy::World::getJacE))
 	;
 }
