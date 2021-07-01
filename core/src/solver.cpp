@@ -67,8 +67,6 @@ void PgsSolver::step_slipping_contact (	const Eigen::Vector3d & ci,
 	double thetap;
 	Eigen::Vector3d lambp;
 	int i;
-	int n_theta = 0;
-	int n_looking = 0;
 	for (i = 0; i < 300; i++) {
 		thetap = theta;
 		lambp = lamb;
@@ -161,20 +159,13 @@ double PgsSolver::step (	const int & n_contact,
 
 void PgsSolver::solve (const Eigen::VectorXd & zero_velocity,
 				const Eigen::MatrixXd & M_inv,
-				const std::vector<Eigen::MatrixXd> & all_jac,
-				std::vector<Eigen::Vector3d> & all_lamb)
+				int n_contact,
+				const Eigen::MatrixXd & full_jac,
+				Eigen::VectorXd & full_lamb)
 {
-	int n_contact = all_jac.size();
-
-	// concaténer les jacobiennes
-	Eigen::MatrixXd full_jac (3*all_jac.size(), M_inv.cols());
-	for (int i(0); i < n_contact; i++) {
-		full_jac.block(i*3, 0, 3, M_inv.cols()) = all_jac[i];
-	}
-
 	// calculer la matrice de delassus approche naïve
 	Eigen::MatrixXd D = full_jac * M_inv * full_jac.transpose();
-	// calculer la matrice de delassus, probablement mieux
+	// calculer la matrice de delassus, probablement mieux mais en vrai on s'en fout pk M_inv doit être calculé dans tous les cas.
 	// Eigen::MatrixXd D = full_jac * M.colPivHouseholderQr().solve(full_jac.transpose());
 
 	// calculer la vitesse sans force dans toutes les jacobiennes
@@ -193,18 +184,12 @@ void PgsSolver::solve (const Eigen::VectorXd & zero_velocity,
 		D.block<3,3>(i*3, i*3) = Eigen::Matrix3d::Zero();
 	}
 
-	// setup le vector de forces :
-	Eigen::VectorXd full_lamb = Eigen::VectorXd::Zero(3*n_contact);
-	
 	residual_ = 42;
 	alpha_ = 1;
 	for (pgs_step_ = 0; pgs_step_ < 100 && residual_ > 1e-6; pgs_step_++) {
 		residual_  = step(n_contact, D, c, all_Mi_inv, all_Mi, full_lamb);
 		if (alpha_ > 0.7)
 			alpha_ *= 0.99;
-	}
-	for (int i(0); i < n_contact; i++) {
-		all_lamb[i] = full_lamb.segment<3>(3*i);
 	}
 	// std::cout << "pgs_step : " << pgs_step_ << std::endl;
 }

@@ -13,8 +13,9 @@ namespace erquy {
 		public:
 			void solve (const Eigen::VectorXd & zero_velocity,
 						const Eigen::MatrixXd & M_inv,
-						const std::vector<Eigen::MatrixXd> & all_jac, 
-						std::vector<Eigen::Vector3d> & all_lamb);
+						int n_contact,
+						const Eigen::MatrixXd & full_jac, 
+						Eigen::VectorXd & full_lamb);
 
 			double step (	const int & n_contact,
 							const Eigen::MatrixXd & D,

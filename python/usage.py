@@ -11,16 +11,19 @@ import os
 from os.path import dirname, join, abspath
 import time
 import time
+import matplotlib.pyplot as plt
 
 def sleep (dt):
 	start = time.time()
 	while start + dt > time.time():
 		pass 
 
-import erquy_py
-from visualizer import Visualizer
-
 SPEED_TEST = len(sys.argv) > 1 and sys.argv[1] == "speed"
+VISU_TEST = len(sys.argv) > 1 and sys.argv[1] == "visualize"
+
+import erquy_py
+if not SPEED_TEST:
+	from visualizer import Visualizer
 
 if True:
 	urdf_name = "idefX"
@@ -77,6 +80,8 @@ if not SPEED_TEST:
 	viz.update(q)
 	input ()
 
+all_forces = [[] for i in range(4)]
+
 m = 0
 all_start = time.time()
 for i in range(1000):
@@ -85,24 +90,20 @@ for i in range(1000):
 		world.integrate()
 	dt = time.time()-start
 	print(dt, "->", (1*0.01)/dt, "fois le temps réel")
-	q, u = world.getState()
-	# print(q, u)
-	all_jac = list(world.getJacobians())
 
-	if len(all_jac) > 42:
-		m += 1
-		# [print(jac) for jac in all_jac]
-		# jac = np.asarray(all_jac[0])
-		# f = np.asarray([0, 0, 0.310829])
-		# M = np.asarray(world.getM())
-		# print("coucou")
-		# print(jac.T @ f)
-		# print(np.linalg.inv(M))
-		# print(np.linalg.inv(M) @ jac.T @ f)
-		if m > 0:
-			exit()
+	if VISU_TEST:
+		n_contact, contact_joint_id, full_lamb = world.getContactInfos()
+		for contact_pair in contact_joint_id:
+			for i, id in enumerate([4, 7, 10, 13]):
+				if id in contact_pair:
+					all_forces[i].append([np.sqrt(np.sum(np.square(full_lamb[3*i:3*i+2]))), full_lamb[3*i+2]])
+		
 
 	if not SPEED_TEST:
+		q, u = world.getState()
+		# print(q, u)
+
+	if not SPEED_TEST and not VISU_TEST:
 		viz.update(q)
 		
 		if True:
@@ -112,7 +113,14 @@ for i in range(1000):
 
 all_delta_time = time.time() - all_start
 print(all_delta_time, "->", (1000*0.01)/all_delta_time, "fois le temps réel")
-	
+
+if VISU_TEST:
+	fig, axs = plt.subplots(2, 2)
+	axs[0][0].plot(np.stack(all_forces[0]))
+	axs[1][0].plot(np.stack(all_forces[1]))
+	axs[0][1].plot(np.stack(all_forces[2]))
+	axs[1][1].plot(np.stack(all_forces[3]))
+	plt.show()
 	
 
 

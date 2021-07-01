@@ -7,6 +7,102 @@ World::World () {
 
 }
 
+Eigen::Matrix3d get_skew_from_vector(Eigen::Vector3d dpos) {
+	Eigen::Matrix3d to_return;
+	to_return << 0, -dpos(2), dpos(1),
+				dpos(2), 0, -dpos(0),
+				-dpos(1), dpos(0), 0;
+	return to_return;
+}
+
+// main method
+
+void World::integrate () {
+
+	pinocchio::computeJointJacobians(model_, data_, q_);
+
+	all_jac_.clear();
+	all_lamb_.clear();
+	
+	// finding all collisions
+	pinocchio::computeCollisions(model_, data_, geom_model_, geom_data_, q_);
+
+	int fid0; // id of the frames that are potentially in collision
+	int fid1;
+	int jid0; // id of the joints that are potentially in collision
+	int jid1;
+
+	n_contact_ = 0;
+	for (int k=0; k < geom_model_.collisionPairs.size(); k++) {
+		n_contact_ += geom_data_.collisionResults[k].numContacts();
+	}
+
+	contact_joint_id_ = Eigen::MatrixXi::Zero(n_contact_, 2);
+	full_jac_ = Eigen::MatrixXd::Zero(3*n_contact_, model_.nv);
+	full_lamb_ = Eigen::VectorXd::Zero(3*n_contact_);
+
+	int contact_id = 0;
+	for (int k=0; k < geom_model_.collisionPairs.size(); k++) {
+		for (int l(0); l < geom_data_.collisionResults[k].numContacts(); l++) {
+			hpp::fcl::Contact c = geom_data_.collisionResults[k].getContact(l);
+
+			fid0 = geom_model_.geometryObjects[geom_model_.collisionPairs[k].first].parentFrame; 
+			fid1 = geom_model_.geometryObjects[geom_model_.collisionPairs[k].second].parentFrame; 
+			jid0 = model_.frames[fid0].parent;
+			jid1 = model_.frames[fid1].parent;
+			contact_joint_id_(contact_id, 0) = jid0;
+			contact_joint_id_(contact_id, 1) = jid1;
+			
+			// computing the jacobian for this contact
+			Eigen::MatrixXd fjac0 = Eigen::MatrixXd::Zero(6, model_.nv);
+			Eigen::MatrixXd fjac1 = Eigen::MatrixXd::Zero(6, model_.nv);
+			pinocchio::getJointJacobian(model_, data_, jid0, pinocchio::WORLD, fjac0);
+			pinocchio::getJointJacobian(model_, data_, jid1, pinocchio::WORLD, fjac1);
+
+			Eigen::Matrix3d cpos_hat = get_skew_from_vector(- c.pos);
+
+			Eigen::MatrixXd res_jac = fjac0.topRows(3) + cpos_hat * fjac0.bottomRows(3)
+									- fjac1.topRows(3) - cpos_hat * fjac1.bottomRows(3);
+			
+			Eigen::Quaterniond normal_rot = Eigen::Quaterniond::FromTwoVectors(c.normal, -Eigen::Vector3d::UnitZ());
+			full_jac_.block(contact_id*3, 0, 3, model_.nv) = normal_rot.normalized().toRotationMatrix() * res_jac;
+			contact_id++;
+		}
+	}
+	
+	// main pinocchio algorithm
+	h_ = pinocchio::rnea(model_, data_, q_, u_, Eigen::VectorXd::Zero(model_.nv)); // computes the torques needed to track zero acceleration
+	pinocchio::crba(model_, data_, q_); // computes the mass matrix
+	data_.M.triangularView<Eigen::StrictlyLower>() = data_.M.transpose().triangularView<Eigen::StrictlyLower>(); // fucking pinocchio
+	
+	// calculate acceleration due to gravity
+	ag_ = Eigen::VectorXd::Zero(model_.nv);
+	for (int i(0); i < model_.njoints; i++) {
+		if (model_.joints[i].nq() == 7 && model_.joints[i].nv() == 6) {
+			ag_.segment<3>(model_.joints[i].idx_v()) = data_.oMi[i].rotation().transpose() * gravity_;
+		}
+	}
+
+	// computes the pysical quantities for easy integration
+	dq_ = Eigen::VectorXd::Zero(model_.nv);
+	pinocchio::difference(model_, q_targ_, q_, dq_);
+	tau_star_ =  data_.M * (u_ + timeStep_ * ag_) + timeStep_ * (- h_ - dq_.cwiseProduct(kp_) + u_targ_.cwiseProduct(kd_)) ; // TODO : element wise product
+	M_bar_ = data_.M + (timeStep_ * timeStep_ * kp_ + timeStep_ * kd_).asDiagonal().toDenseMatrix();
+	M_bar_inv_ = M_bar_.inverse();
+	
+	// Solves for the contact forces that satisfy every constrains
+	solver.solve (M_bar_inv_ * tau_star_, M_bar_inv_, n_contact_, full_jac_, full_lamb_);
+	
+	// computes the forward dynamics
+	u_ = M_bar_inv_ * (tau_star_ + full_jac_.transpose() * full_lamb_);
+	q_ = pinocchio::integrate(model_, q_, u_ * timeStep_);
+}
+
+
+
+
+// --- getters and setters ---
+
 void World::loadUrdf (std::string urdf_path, std::string meshes_path) {
 	pinocchio::urdf::buildModel(urdf_path, model_);
 	data_ = pinocchio::Data(model_);
@@ -24,99 +120,6 @@ void World::loadUrdf (std::string urdf_path, std::string meshes_path) {
 
 }
 
-Eigen::Matrix3d get_skew_from_vector(Eigen::Vector3d dpos) {
-	Eigen::Matrix3d to_return;
-	to_return << 0, -dpos(2), dpos(1),
-				dpos(2), 0, -dpos(0),
-				-dpos(1), dpos(0), 0;
-	return to_return;
-}
-
-void World::integrate () {
-
-	all_jac_.clear();
-	all_lamb_.clear();
-	
-	pinocchio::computeJointJacobians(model_, data_, q_);
-
-	Eigen::VectorXd h = pinocchio::rnea(model_, data_, q_, u_, Eigen::VectorXd::Zero(model_.nv)); // computes the torques needed to track zero acceleration
-	pinocchio::crba(model_, data_, q_); // computes the mass matrix
-	data_.M.triangularView<Eigen::StrictlyLower>() = data_.M.transpose().triangularView<Eigen::StrictlyLower>();
-	// M_inv = data_.M.inverse();
-
-	// actually slower than the above expermentally with simple system
-	// Eigen::MatrixXd M_inv = pinocchio::computeMinverse(model_, data_, q_);
-	// // fucking pinocchio
-	// M_inv.triangularView<Eigen::StrictlyLower>() = M_inv.transpose().triangularView<Eigen::StrictlyLower>();
-	
-	// calculate acceleration due to gravity
-	ag = Eigen::VectorXd::Zero(model_.nv);
-	for (int i(0); i < model_.njoints; i++) {
-		if (model_.joints[i].nq() == 7 && model_.joints[i].nv() == 6) {
-			ag.segment<3>(model_.joints[i].idx_v()) = data_.oMi[i].rotation().transpose() * gravity_;
-		}
-	}
-
-	
-	// finding all collisions
-	pinocchio::computeCollisions(model_, data_, geom_model_, geom_data_, q_);
-
-	int fid0; // id of the frames that are potentially in collision
-	int fid1;
-	int jid0; // id of the joints that are potentially in collision
-	int jid1;
-
-	for (int k=0; k < geom_model_.collisionPairs.size(); k++) {
-		const pinocchio::CollisionPair & cp = geom_model_.collisionPairs[k];
-		const hpp::fcl::CollisionResult & cr = geom_data_.collisionResults[k];
-
-		for (int l(0); l < cr.numContacts(); l++) {
-			hpp::fcl::Contact c = cr.getContact(l);
-
-			fid0 = geom_model_.geometryObjects[cp.first].parentFrame; 
-			fid1 = geom_model_.geometryObjects[cp.second].parentFrame; 
-			jid0 = model_.frames[fid0].parent;
-			jid1 = model_.frames[fid1].parent;
-			
-			// computing the jacobian for this contact
-			Eigen::MatrixXd fjac0 = Eigen::MatrixXd::Zero(6, model_.nv);
-			Eigen::MatrixXd fjac1 = Eigen::MatrixXd::Zero(6, model_.nv);
-			pinocchio::getJointJacobian(model_, data_, jid0, pinocchio::WORLD, fjac0);
-			pinocchio::getJointJacobian(model_, data_, jid1, pinocchio::WORLD, fjac1);
-
-			Eigen::Matrix3d cpos_hat = get_skew_from_vector(- c.pos);
-
-			Eigen::MatrixXd res_jac = fjac0.topRows(3) + cpos_hat * fjac0.bottomRows(3)
-									- fjac1.topRows(3) - cpos_hat * fjac1.bottomRows(3);
-			
-			Eigen::Quaterniond normal_rot = Eigen::Quaterniond::FromTwoVectors(c.normal, -Eigen::Vector3d::UnitZ());
-			res_jac = normal_rot.normalized().toRotationMatrix() * res_jac;
-			
-			all_jac_.push_back(res_jac);
-			all_lamb_.push_back(Eigen::Vector3d::Zero(3));
-		}
-	}
-	
-	
-	// computes the forward dynamics
-	Eigen::VectorXd dq = Eigen::VectorXd::Zero(model_.nv);
-	pinocchio::difference(model_, q_targ_, q_, dq);
-	Eigen::VectorXd tau_star =  data_.M * (u_ + timeStep_ * ag) + timeStep_ * (- h - dq.cwiseProduct(kp_) + u_targ_.cwiseProduct(kd_)) ; // TODO : element wise product
-	Eigen::MatrixXd M_bar = data_.M + (timeStep_ * timeStep_ * kp_ + timeStep_ * kd_).asDiagonal().toDenseMatrix();
-	Eigen::MatrixXd M_bar_inv = M_bar.inverse();
-	
-	// Solves for the contact forces that satisfy every constrains
-	solver.solve (M_bar_inv * tau_star, M_bar_inv, all_jac_, all_lamb_);
-	
-	Eigen::VectorXd full_tau = tau_star;
-	for (int i(0); i < all_jac_.size(); i++) {
-		full_tau += all_jac_[i].transpose() * all_lamb_[i];
-	}
-	u_ = M_bar_inv * full_tau;
-	q_ = pinocchio::integrate(model_, q_, u_ * timeStep_);
-}
-
-// --- getters and setters ---
 
 int World::getGeneralizedCoordinateDim (){
 	return model_.nq;
@@ -182,15 +185,6 @@ void World::setPdTarget (Eigen::VectorXd q_targ, Eigen::VectorXd u_targ) {
 	u_targ_ = u_targ;
 }
 
-std::vector<Eigen::MatrixXd>::iterator World::getJacB ()
-{
-	return all_jac_.begin();
-}
-std::vector<Eigen::MatrixXd>::iterator World::getJacE ()
-{
-	return all_jac_.end();
-}
-
-Eigen::MatrixXd World::getM_inv () {
-	return M_inv;
+boost::python::tuple World::getContactInfos () {
+	return boost::python::make_tuple(n_contact_, contact_joint_id_, full_lamb_);
 }

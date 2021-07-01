@@ -52,8 +52,7 @@ BOOST_PYTHON_MODULE(erquy_py) {
 		.def("setPdGains", &erquy::World::setPdGains)
 		.def("setPdTarget", &erquy::World::setPdTarget)
 
-		.def("getJacobians", range(&erquy::World::getJacB, &erquy::World::getJacE))
-		.def("getM_inv", &erquy::World::getM_inv)
+		.def("getContactInfos", &erquy::World::getContactInfos)
 
 		.def_readonly("solver", & erquy::World::solver)
 	;
