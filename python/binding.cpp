@@ -48,6 +48,10 @@ BOOST_PYTHON_MODULE(erquy_py) {
 		.def("setGravity", &erquy::World::setGravity)
 		.def("getGravity", &erquy::World::getGravity)
 
+		.def("enablePd", &erquy::World::enablePd)
+		.def("setPdGains", &erquy::World::setPdGains)
+		.def("setPdTarget", &erquy::World::setPdTarget)
+
 		.def("getJacobians", range(&erquy::World::getJacB, &erquy::World::getJacE))
 		.def("getM_inv", &erquy::World::getM_inv)
 

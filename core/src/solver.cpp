@@ -97,7 +97,7 @@ void PgsSolver::step_slipping_contact (	const Eigen::Vector3d & ci,
 	Eigen::Vector3d lambd;
 	// while ((lamb-lambp).squaredNorm() > 1e-4 ) { // gets stuck for some reason even if the theta are very similar
 	i = 0;
-	while (abs(theta - thetap) > 1e-6) {
+	while (abs(theta - thetap) > 1e-6) { // 1e-6
 		thetad = .5 * (theta + thetap);
 		r = calc_r(ci, Mi_inv, theta);
 		lamb_z = calc_lamb_z(ci, Mi_inv, r, theta);

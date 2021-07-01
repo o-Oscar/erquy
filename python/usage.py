@@ -24,8 +24,13 @@ SPEED_TEST = len(sys.argv) > 1 and sys.argv[1] == "speed"
 
 if True:
 	urdf_name = "idefX"
-	q = np.asarray([0, 0, 1, 0, 0, 0, 1] + [0, 0, 0] * 4)
+	q = np.asarray([0, 0, 1, 0, 0, 0, 1] + [0, np.pi/4, -np.pi/2] * 4)
 	u = np.asarray([0, 0, 0, 0, 0, 0] + [0, 0, 0] * 4)
+	kp = np.asarray([0] * 6 + [72] * 12)
+	kd = np.asarray([0] * 6 + [7.2] * 12)
+	q_target = q
+	# q_target = np.asarray([0, 0, 1, 0, 0, 0, 1] + [0, 0, 0] * 4)
+	u_target = u * 0
 elif True:
 	urdf_name = "elbow"
 	q = np.asarray([0, 0, .5, 0, 0, 0, 1, -np.pi/2])
@@ -51,11 +56,6 @@ if not SPEED_TEST:
 world = erquy_py.World()
 world.loadUrdf (urdf_path, meshes_path)
 
-# config
-world.setGravity(np.asarray([0, 0, -10]))
-# world.setGravity(np.asarray([0, 0, 0]))
-world.setTimeStep(0.01)
-
 
 if not world.nq() == q.shape[0] or not world.nv() == u.shape[0]:
 	print("q expected : ", world.nq()) 
@@ -64,7 +64,15 @@ if not world.nq() == q.shape[0] or not world.nv() == u.shape[0]:
 	print("u receivec : ", u.shape[0])
 	exit()
 
+# config
+world.setGravity(np.asarray([0, 0, -10]))
+# world.setGravity(np.asarray([0, 0, 0]))
+world.setTimeStep(0.01)
+
 world.setState (q, u)
+world.setPdGains (kp, kd)
+world.setPdTarget (q_target, u_target)
+
 if not SPEED_TEST:
 	viz.update(q)
 	input ()

@@ -18,6 +18,10 @@ void World::loadUrdf (std::string urdf_path, std::string meshes_path) {
 
 	gravity_ << 0, 0, 0;
 	model_.gravity.linear() << 0, 0, 0;
+
+	kp_ = Eigen::VectorXd::Zero(model_.nv);
+	kd_ = Eigen::VectorXd::Zero(model_.nv);
+
 }
 
 Eigen::Matrix3d get_skew_from_vector(Eigen::Vector3d dpos) {
@@ -35,10 +39,10 @@ void World::integrate () {
 	
 	pinocchio::computeJointJacobians(model_, data_, q_);
 
-	b = pinocchio::rnea(model_, data_, q_, u_, Eigen::VectorXd::Zero(model_.nv)); // computes the torques needed to track zero acceleration
+	Eigen::VectorXd h = pinocchio::rnea(model_, data_, q_, u_, Eigen::VectorXd::Zero(model_.nv)); // computes the torques needed to track zero acceleration
 	pinocchio::crba(model_, data_, q_); // computes the mass matrix
 	data_.M.triangularView<Eigen::StrictlyLower>() = data_.M.transpose().triangularView<Eigen::StrictlyLower>();
-	M_inv = data_.M.inverse();
+	// M_inv = data_.M.inverse();
 
 	// actually slower than the above expermentally with simple system
 	// Eigen::MatrixXd M_inv = pinocchio::computeMinverse(model_, data_, q_);
@@ -94,17 +98,21 @@ void World::integrate () {
 	}
 	
 	
-	// Solves for the contact forces that satisfy every constrains
-	solver.solve (u_ + timeStep_ * ag - M_inv * timeStep_ * b, M_inv, all_jac_, all_lamb_);
-	
-
 	// computes the forward dynamics
-	Eigen::VectorXd full_tau =  - timeStep_ * b;
+	Eigen::VectorXd dq = Eigen::VectorXd::Zero(model_.nv);
+	pinocchio::difference(model_, q_targ_, q_, dq);
+	Eigen::VectorXd tau_star =  data_.M * (u_ + timeStep_ * ag) + timeStep_ * (- h - dq.cwiseProduct(kp_) + u_targ_.cwiseProduct(kd_)) ; // TODO : element wise product
+	Eigen::MatrixXd M_bar = data_.M + (timeStep_ * timeStep_ * kp_ + timeStep_ * kd_).asDiagonal().toDenseMatrix();
+	Eigen::MatrixXd M_bar_inv = M_bar.inverse();
 	
+	// Solves for the contact forces that satisfy every constrains
+	solver.solve (M_bar_inv * tau_star, M_bar_inv, all_jac_, all_lamb_);
+	
+	Eigen::VectorXd full_tau = tau_star;
 	for (int i(0); i < all_jac_.size(); i++) {
 		full_tau += all_jac_[i].transpose() * all_lamb_[i];
 	}
-	u_ += timeStep_ * ag + M_inv * full_tau;
+	u_ = M_bar_inv * full_tau;
 	q_ = pinocchio::integrate(model_, q_, u_ * timeStep_);
 }
 
@@ -158,6 +166,20 @@ void World::setGravity (Eigen::Vector3d gravity) {
 }
 Eigen::Vector3d World::getGravity () {
 	return gravity_;
+}
+
+void World::enablePd (bool enable_pd) {
+	enable_pd_ = enable_pd;
+}
+
+void World::setPdGains (Eigen::VectorXd kp, Eigen::VectorXd kd) {
+	kp_ = kp;
+	kd_ = kd;
+}
+
+void World::setPdTarget (Eigen::VectorXd q_targ, Eigen::VectorXd u_targ) {
+	q_targ_ = q_targ;
+	u_targ_ = u_targ;
 }
 
 std::vector<Eigen::MatrixXd>::iterator World::getJacB ()

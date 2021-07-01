@@ -54,6 +54,10 @@ namespace erquy {
 			void setGravity (Eigen::Vector3d gravity);
 			Eigen::Vector3d getGravity ();
 
+			void enablePd (bool enable_pd);
+			void setPdGains (Eigen::VectorXd kp, Eigen::VectorXd kd);
+			void setPdTarget (Eigen::VectorXd q_targ, Eigen::VectorXd u_targ);
+
 			std::vector<Eigen::MatrixXd>::iterator getJacB ();
 			std::vector<Eigen::MatrixXd>::iterator getJacE ();
 
@@ -72,8 +76,14 @@ namespace erquy {
 			pinocchio::GeometryModel geom_model_;
 			pinocchio::GeometryData geom_data_;
 
+			bool enable_pd_ = false;
 			Eigen::VectorXd q_;
 			Eigen::VectorXd u_;
+			Eigen::VectorXd kp_;
+			Eigen::VectorXd kd_;
+
+			Eigen::VectorXd q_targ_;
+			Eigen::VectorXd u_targ_;
 
 			real timeStep_ = 0.01;
 			real erp_ = 0.003; // Error reduction parameter : time constant for resolving penetration
