@@ -4,6 +4,12 @@
 
 using namespace erquy;
 
+void PgsSolver::set_solver_params (double betha1, double betha2, double betha3) {
+	betha1_ = betha1;
+	betha2_ = betha2;
+	betha3_ = betha3;
+}
+
 double sgn(double val) {
     return (double(0) < val) - (val < double(0));
 }
@@ -46,7 +52,6 @@ double calc_dE_dtheta (	const Eigen::Vector3d & ci,
 }
 
 
-// goal : finding the lambda on the 
 void PgsSolver::step_slipping_contact (	const Eigen::Vector3d & ci,
 										const Eigen::Matrix3d & Mi_inv,
 										Eigen::Vector3d & lamb_out) {
@@ -58,17 +63,13 @@ void PgsSolver::step_slipping_contact (	const Eigen::Vector3d & ci,
 	Eigen::Vector3d lamb;
 	lamb << r * cos(theta), r * sin(theta), lamb_z;
 	double D0 = sgn(calc_dE_dtheta(ci, Mi_inv, lamb));
-	double alpha = -0.1 * D0;
+	double alpha = -betha1_ * D0;
 	double thetap;
 	Eigen::Vector3d lambp;
-	// std::cout << "lamb_v0 : " << lamb_v0.transpose() << std::endl;
-	// std::cout << "lamb_0 : " << lamb.transpose() << std::endl;
-	// std::cout << "delta_lamb_0 : " << (lamb - lamb_v0).transpose() << std::endl;
-	// std::cout << "dh2_0 : " << calc_dh2(lamb).transpose() << std::endl;
-	// std::cout << "theta_0 : " << theta << std::endl;
-	// std::cout << "r_0 : " << r << std::endl;
-	// std::cout << "first_check : " << calc_dh2(lamb).transpose() * (lamb - lamb_v0) << std::endl;
-	for (int i(0); i < 10; i++) {
+	int i;
+	int n_theta = 0;
+	int n_looking = 0;
+	for (i = 0; i < 300; i++) {
 		thetap = theta;
 		lambp = lamb;
 		theta = theta + alpha;
@@ -76,24 +77,26 @@ void PgsSolver::step_slipping_contact (	const Eigen::Vector3d & ci,
 		lamb_z = calc_lamb_z(ci, Mi_inv, r, theta);
 		lamb << r * cos(theta), r * sin(theta), lamb_z;
 		if (calc_dh2(lamb).transpose() * (lamb - lamb_v0) > 0 || r < 0) {
-			alpha *= 0.5;
 			// std::cout << "Bad theta : " << theta << std::endl;
+			alpha *= betha2_;
 			theta = thetap;
 		}else {
 			if (calc_dE_dtheta(ci, Mi_inv, lamb) * D0 > 0) {
-				alpha *= 1.;
 				// std::cout << "Still looking" << std::endl;
+				alpha *= betha3_;
 			}else {
-				// std::cout << "Trying to exit" << std::endl;
+				// std::cout << "Trying to exit " << i << std::endl;
 				break;
 			}
 		}
 	}
+	// std::cout << "exited : " << i << std::endl;
 
 	// actual bisection
 	double thetad;
 	Eigen::Vector3d lambd;
 	// while ((lamb-lambp).squaredNorm() > 1e-4 ) { // gets stuck for some reason even if the theta are very similar
+	i = 0;
 	while (abs(theta - thetap) > 1e-6) {
 		thetad = .5 * (theta + thetap);
 		r = calc_r(ci, Mi_inv, theta);
@@ -106,112 +109,102 @@ void PgsSolver::step_slipping_contact (	const Eigen::Vector3d & ci,
 			theta = thetad;
 			lamb = lambd;
 		}
-		// std::cout << "squared norm : " << (lamb-lambp).squaredNorm() << std::endl;
-		// std::cout << "thetas : " << theta << " : " << thetap << std::endl;
+		i+=1;
 	}
+	// std::cout << "exited : " << i << std::endl;
 	lamb_out = lamb;
 }
 
-double PgsSolver::step (	const Eigen::VectorXd & zero_velocity,
-				const Eigen::MatrixXd & M_inv,
-				const std::vector<Eigen::MatrixXd> & all_Mi_inv,
-				const std::vector<Eigen::MatrixXd> & all_jac, 
-				std::vector<Eigen::Vector3d> & all_lamb)
+void PgsSolver::step_sticking_contact (const Eigen::Vector3d & ci,
+										const Eigen::Matrix3d & Mi_inv,
+										Eigen::Vector3d & lamb_out) {
+	lamb_out = -Mi_inv.inverse() * ci;
+}
+
+double PgsSolver::step (	const int & n_contact,
+							const Eigen::MatrixXd & D,
+							const Eigen::VectorXd & c,
+							const std::vector<Eigen::Matrix3d> & all_Mi_inv,
+							const std::vector<Eigen::Matrix3d> & all_Mi,
+							Eigen::VectorXd & full_lamb)
 {
+	// shuffling the order in which the forces are processed to improve stability
 	std::vector<int> id_arr;
-	for (int i(0); i < all_jac.size(); i++) {
+	for (int i(0); i < n_contact; i++) {
 		id_arr.push_back(i);
 	}
-	// random_shuffle(id_arr.begin(), id_arr.end());
+	random_shuffle(id_arr.begin(), id_arr.end());
 
-	std::vector<Eigen::Vector3d> new_all_lamb;
-	for (int id(0), i; id < all_jac.size(); id++) {
+	double residual = 0;
+	for (int id(0), i; id < n_contact; id++) {
 		i = id_arr[id];
 
-		Eigen::VectorXd temp_sum = zero_velocity; // u_ +  M_inv * timeStep_ * (-b);
-		for (int k(0); k < all_jac.size(); k++) {
-			if (k != i) {
-				temp_sum += M_inv * all_jac[k].transpose() * all_lamb[k];
-			}
-		}
-		Eigen::Vector3d ci = all_jac[i] * temp_sum;
-		
+		Eigen::Vector3d ci = c.segment<3>(i*3) + D.block(3*i, 0, 3, 3*n_contact) * full_lamb;
+		Eigen::Vector3d lamb_v0 = -all_Mi[i] * ci;
 		Eigen::Vector3d lamb = Eigen::Vector3d::Zero();
 		
-		// using a small diagonal value to handle the case of degenerate M matrices (not great code, not backed up by any theory)
-		Eigen::Matrix3d M_inv = all_Mi_inv[i];
-		if (M_inv.determinant() < 1e-12) {
-			M_inv += 1e-4 * Eigen::Matrix3d::Identity(3, 3);
-		}
-
-		// opening contact
-		if (ci(2) > 0) {
-			// std::cout << "opening contact" << std::endl;
-			// do nothing : the force should be zero
-		} else
-		// sticking contact
-		if (mu * mu * all_lamb[i][2] * all_lamb[i][2] > all_lamb[i][0] * all_lamb[i][0] + all_lamb[i][1] * all_lamb[i][1]) {
-			
-			// std::cout << "sticking contact" << std::endl;
-			lamb = -M_inv.inverse() * ci;
-		} else
-		// slipping contact
+		if (ci(2) > 0) { // opening contact
+			// nothing.
+		} else if (mu * mu * lamb_v0[2] * lamb_v0[2] > lamb_v0[0] * lamb_v0[0] + lamb_v0[1] * lamb_v0[1]) {
+			lamb = lamb_v0;
+		} else // slipping contact
 		{
-			// std::cout << "slipping contact" << std::endl;
-			// std::cout << all_lamb[i].transpose() << std::endl;
-			// std::cout << mu * mu * all_lamb[i][2] * all_lamb[i][2] << " : " << all_lamb[i][0] * all_lamb[i][0] + all_lamb[i][1] * all_lamb[i][1] << std::endl;
-			// step_slipping_contact(ci, all_Mi_inv[i], lamb);
-			step_slipping_contact(ci, M_inv, lamb);
+			step_slipping_contact(ci, all_Mi_inv[i], lamb);
 		}
-		// lamb = -(all_Mi_inv[i] + 1e-9 * Eigen::Matrix3d::Identity(3, 3)).inverse() * ci;
 
-
-		// all_lamb[i] = -all_Mi[i].inverse() * ci; //  carefull : if the contact is locked in some direction, the inverse does not exist
-		// these line enforces frictionnless contact and lets us check that the jacobian is rotated the right amount
-		// lamb[2] = -ci(2) / all_Mi_inv[i](2,2);
-		// lamb[0] = 0; lamb[1] = 0;
-
-		new_all_lamb.push_back(lamb);
+		residual += (lamb - full_lamb.segment<3>(3*i)).squaredNorm();
+		full_lamb.segment<3>(3*i) += alpha_ * (lamb - full_lamb.segment<3>(3*i));
 	}
 
-	// copy of the new lambda
-	double alpha = 0.7;
-	double residual = 0;
-	for (int i(0); i < all_jac.size(); i++) {
-		residual += (new_all_lamb[i] - all_lamb[i]).squaredNorm();
-		all_lamb[i] += alpha * (new_all_lamb[i] - all_lamb[i]);
-	}
 	return residual;
 }
 
 void PgsSolver::solve (const Eigen::VectorXd & zero_velocity,
 				const Eigen::MatrixXd & M_inv,
-				const std::vector<Eigen::MatrixXd> & all_jac, 
+				const std::vector<Eigen::MatrixXd> & all_jac,
 				std::vector<Eigen::Vector3d> & all_lamb)
 {
-	
-	std::vector<Eigen::MatrixXd> all_Mi;
-	for (int i(0); i < all_jac.size(); i++) {
-		all_Mi.push_back((all_jac[i] * M_inv * all_jac[i].transpose()));
-	}
-	
-	// TODO : iterate until max number of step or physical violation is very small
-	double residual = 42;
-	for (int pgs_step(0); pgs_step < 10 && residual > 1e-6; pgs_step++) {
-		// std::cout << "step " << pgs_step << std::endl;
-		residual = step (zero_velocity, M_inv, all_Mi, all_jac, all_lamb);
-		// std::cout << "residual : " << residual << std::endl;
+	int n_contact = all_jac.size();
+
+	// concaténer les jacobiennes
+	Eigen::MatrixXd full_jac (3*all_jac.size(), M_inv.cols());
+	for (int i(0); i < n_contact; i++) {
+		full_jac.block(i*3, 0, 3, M_inv.cols()) = all_jac[i];
 	}
 
+	// calculer la matrice de delassus approche naïve
+	Eigen::MatrixXd D = full_jac * M_inv * full_jac.transpose();
+	// calculer la matrice de delassus, probablement mieux
+	// Eigen::MatrixXd D = full_jac * M.colPivHouseholderQr().solve(full_jac.transpose());
 
-	/*
-	for (int i(0); i < all_jac.size(); i++) {
-		all_lamb[i][0] = 0; all_lamb[i][1] = 0;
-	}*/
+	// calculer la vitesse sans force dans toutes les jacobiennes
+	Eigen::VectorXd c = full_jac * zero_velocity;
 
-	// std::cout << "Resulting forces : " << std::endl;
-	// for (int i(0); i < all_jac.size(); i++) {
-	// 	std::cout << all_lamb[i].transpose() << std::endl;
-	// }
+	// calculer les inverses des matrices de masse apparentes aux contacts
+	std::vector<Eigen::Matrix3d> all_Mi;
+	std::vector<Eigen::Matrix3d> all_Mi_inv;
+	for (int i(0); i < n_contact; i++) {
+		all_Mi_inv.push_back(D.block<3,3>(i*3, i*3));
+		if (D.block<3,3>(i*3, i*3).determinant() < 1e-12) {
+			all_Mi.push_back((all_Mi_inv[i] + 1e-4 * Eigen::Matrix3d::Identity(3, 3)).inverse());
+		} else {
+			all_Mi.push_back(all_Mi_inv[i].inverse());
+		}
+		D.block<3,3>(i*3, i*3) = Eigen::Matrix3d::Zero();
+	}
 
+	// setup le vector de forces :
+	Eigen::VectorXd full_lamb = Eigen::VectorXd::Zero(3*n_contact);
+	
+	residual_ = 42;
+	alpha_ = 1;
+	for (pgs_step_ = 0; pgs_step_ < 100 && residual_ > 1e-6; pgs_step_++) {
+		residual_  = step(n_contact, D, c, all_Mi_inv, all_Mi, full_lamb);
+		if (alpha_ > 0.7)
+			alpha_ *= 0.99;
+	}
+	for (int i(0); i < n_contact; i++) {
+		all_lamb[i] = full_lamb.segment<3>(3*i);
+	}
+	// std::cout << "pgs_step : " << pgs_step_ << std::endl;
 }

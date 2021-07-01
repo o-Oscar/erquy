@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 set(BUILD_VERSION 1.0)
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -DNDEBUG -O3")
 
 # set the project name
 project(erquy VERSION ${BUILD_VERSION})

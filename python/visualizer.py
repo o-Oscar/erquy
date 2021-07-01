@@ -1,5 +1,6 @@
 from pinocchio.visualize import MeshcatVisualizer
 import pinocchio as pin
+import meshcat.transformations as tf
 
 class Visualizer:
 	def __init__ (self, urdf_path, meshes_path):
@@ -11,6 +12,6 @@ class Visualizer:
 			print(err)
 			exit(0)
 		self.viz.loadViewerModel()
-
+		
 	def update (self, q):
 		self.viz.display(q)

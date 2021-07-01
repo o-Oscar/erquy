@@ -1,3 +1,8 @@
+"""
+py-spy record -o profile.svg --native python3 python/usage.py speed
+file:///home/oscar/workspace/erquy/build/profile.svg
+"""
+
 
 import numpy as np
 np.set_printoptions(precision=4, suppress=True)
@@ -15,7 +20,13 @@ def sleep (dt):
 import erquy_py
 from visualizer import Visualizer
 
+SPEED_TEST = len(sys.argv) > 1 and sys.argv[1] == "speed"
+
 if True:
+	urdf_name = "idefX"
+	q = np.asarray([0, 0, 1, 0, 0, 0, 1] + [0, 0, 0] * 4)
+	u = np.asarray([0, 0, 0, 0, 0, 0] + [0, 0, 0] * 4)
+elif True:
 	urdf_name = "elbow"
 	q = np.asarray([0, 0, .5, 0, 0, 0, 1, -np.pi/2])
 	a = np.pi/4
@@ -31,9 +42,11 @@ elif True:
 	u = np.asarray([0, 0, 0, 0, 0, 0])
 
 urdf_path = join(dirname(dirname(dirname(str(abspath(__file__))))), "data", urdf_name, urdf_name + ".urdf")
-meshes_path = join(dirname(dirname(str(abspath(__file__)))), "data", urdf_name)
+meshes_path = join(dirname(dirname(dirname(str(abspath(__file__))))), "data", urdf_name)
 
-viz = Visualizer(urdf_path, meshes_path)
+
+if not SPEED_TEST:
+	viz = Visualizer(urdf_path, meshes_path)
 
 world = erquy_py.World()
 world.loadUrdf (urdf_path, meshes_path)
@@ -52,13 +65,13 @@ if not world.nq() == q.shape[0] or not world.nv() == u.shape[0]:
 	exit()
 
 world.setState (q, u)
-viz.update(q)
+if not SPEED_TEST:
+	viz.update(q)
+	input ()
 
-world.integrate()
-
-input ()
 m = 0
-for i in range(10000):
+all_start = time.time()
+for i in range(1000):
 	start = time.time()
 	for k in range(1):
 		world.integrate()
@@ -81,13 +94,16 @@ for i in range(10000):
 		if m > 0:
 			exit()
 
-	viz.update(q)
-	
-	if True:
-		sleep(0.01)
-	else:
-		input()
-	
+	if not SPEED_TEST:
+		viz.update(q)
+		
+		if True:
+			sleep(0.01)
+		else:
+			input()
+
+all_delta_time = time.time() - all_start
+print(all_delta_time, "->", (1000*0.01)/all_delta_time, "fois le temps réel")
 	
 	
 

@@ -49,6 +49,12 @@ BOOST_PYTHON_MODULE(erquy_py) {
 		.def("getGravity", &erquy::World::getGravity)
 
 		.def("getJacobians", range(&erquy::World::getJacB, &erquy::World::getJacE))
-		.def("getM", &erquy::World::getM)
+		.def("getM_inv", &erquy::World::getM_inv)
+
+		.def_readonly("solver", & erquy::World::solver)
+	;
+
+	class_<erquy::PgsSolver>("PgsSolver")
+		.def("set_solver_params", &erquy::PgsSolver::set_solver_params)
 	;
 }

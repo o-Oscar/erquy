@@ -7,6 +7,8 @@
 #include "pinocchio/algorithm/frames-derivatives.hpp"
 #include "pinocchio/algorithm/frames.hpp"
 #include "pinocchio/algorithm/geometry.hpp"
+#include "pinocchio/algorithm/aba.hpp"
+
 
 #include "pinocchio/multibody/fcl.hpp"
 
@@ -55,10 +57,12 @@ namespace erquy {
 			std::vector<Eigen::MatrixXd>::iterator getJacB ();
 			std::vector<Eigen::MatrixXd>::iterator getJacE ();
 
-			Eigen::MatrixXd getM ();
+			Eigen::MatrixXd getM_inv ();
 			
 			// std::vector<Eigen::MatrixXd>::iterator getLambB ();
 			// std::vector<Eigen::MatrixXd>::iterator getLambE ();
+
+			PgsSolver solver;
 
 		private:
 
@@ -78,7 +82,7 @@ namespace erquy {
 			// --- step realted ---
 			Eigen::VectorXd ag;
 			Eigen::VectorXd b;
-			Eigen::MatrixXd M;
+			Eigen::MatrixXd M_inv;
 		
 			std::vector<Eigen::MatrixXd> all_jac_;
 			std::vector<Eigen::Vector3d> all_lamb_;
