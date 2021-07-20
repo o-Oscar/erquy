@@ -57,9 +57,24 @@ namespace erquy {
 			void enablePd (bool enable_pd);
 			void setPdGains (Eigen::VectorXd kp, Eigen::VectorXd kd);
 			void setPdTarget (Eigen::VectorXd q_targ, Eigen::VectorXd u_targ);
+			Eigen::MatrixXd getPdForce ();
+
+			void setGeneralizedTorque (Eigen::VectorXd tau);
 
 			boost::python::tuple getContactInfos ();
+			void setMaterialPairProp (int first_idx, int second_idx, real mu);
 
+			std::vector<std::string>::iterator getJointNamesBegin ();
+			std::vector<std::string>::iterator getJointNamesEnd ();
+			int getJointIdxByName (std::string name);
+		
+			std::vector<std::string>::iterator getFrameNamesBegin ();
+			std::vector<std::string>::iterator getFrameNamesEnd ();
+			int getFrameIdxByName (std::string name);
+			Eigen::Vector3d getFramePosition (int idx);
+			Eigen::Matrix3d getFrameOrientation (int idx);
+			Eigen::Vector3d getFrameVelocity (int idx);
+			Eigen::Vector3d getFrameAngularVelocity (int idx);
 			
 			// std::vector<Eigen::MatrixXd>::iterator getLambB ();
 			// std::vector<Eigen::MatrixXd>::iterator getLambE ();
@@ -80,11 +95,17 @@ namespace erquy {
 			Eigen::VectorXd kp_;
 			Eigen::VectorXd kd_;
 
+			Eigen::VectorXd tau_;
+
 			Eigen::VectorXd q_targ_;
 			Eigen::VectorXd u_targ_;
 
 			// contact data
-			int n_contact_;
+			std::map<std::pair<int, int>, real> material_pair_props_;
+			std::pair<int, int> default_contact_pair_ = std::make_pair(-1, -1);
+			std::vector<real> all_mu_;
+
+			int n_contact_ = 0;
 			Eigen::MatrixXi contact_joint_id_;
 			Eigen::MatrixXd full_jac_;
 			Eigen::VectorXd full_lamb_;
@@ -103,6 +124,9 @@ namespace erquy {
 		
 			std::vector<Eigen::MatrixXd> all_jac_;
 			std::vector<Eigen::Vector3d> all_lamb_;
+
+			// --- misc data ---
+			std::vector<std::string> frame_names_;
 
 	};
 }

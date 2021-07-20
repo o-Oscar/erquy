@@ -4,7 +4,7 @@
 using namespace erquy;
 
 World::World () {
-
+	material_pair_props_[default_contact_pair_] = .2;
 }
 
 Eigen::Matrix3d get_skew_from_vector(Eigen::Vector3d dpos) {
@@ -39,7 +39,16 @@ void World::integrate () {
 
 	contact_joint_id_ = Eigen::MatrixXi::Zero(n_contact_, 2);
 	full_jac_ = Eigen::MatrixXd::Zero(3*n_contact_, model_.nv);
-	full_lamb_ = Eigen::VectorXd::Zero(3*n_contact_);
+	// full_lamb_ = Eigen::VectorXd::Zero(3*n_contact_);
+	
+	if (full_lamb_.rows() != 3*n_contact_) { // warm-starts the algorithm with the previous solution to speed up the resolution
+		full_lamb_ = Eigen::VectorXd::Zero(3*n_contact_);
+	}
+	
+
+
+	
+	all_mu_.clear();
 
 	int contact_id = 0;
 	for (int k=0; k < geom_model_.collisionPairs.size(); k++) {
@@ -52,6 +61,14 @@ void World::integrate () {
 			jid1 = model_.frames[fid1].parent;
 			contact_joint_id_(contact_id, 0) = jid0;
 			contact_joint_id_(contact_id, 1) = jid1;
+			std::pair<int, int> p = std::make_pair(jid0, jid1);
+			if (material_pair_props_.find(p) != material_pair_props_.end()) {
+				all_mu_.push_back(material_pair_props_[p]);
+			}
+			else {
+				all_mu_.push_back(material_pair_props_[default_contact_pair_]);
+			}
+			
 			
 			// computing the jacobian for this contact
 			Eigen::MatrixXd fjac0 = Eigen::MatrixXd::Zero(6, model_.nv);
@@ -86,16 +103,17 @@ void World::integrate () {
 	// computes the pysical quantities for easy integration
 	dq_ = Eigen::VectorXd::Zero(model_.nv);
 	pinocchio::difference(model_, q_targ_, q_, dq_);
-	tau_star_ =  data_.M * (u_ + timeStep_ * ag_) + timeStep_ * (- h_ - dq_.cwiseProduct(kp_) + u_targ_.cwiseProduct(kd_)) ; // TODO : element wise product
+	tau_star_ =  data_.M * (u_ + timeStep_ * ag_) + timeStep_ * (- h_ + tau_ - dq_.cwiseProduct(kp_) + u_targ_.cwiseProduct(kd_)) ;
 	M_bar_ = data_.M + (timeStep_ * timeStep_ * kp_ + timeStep_ * kd_).asDiagonal().toDenseMatrix();
 	M_bar_inv_ = M_bar_.inverse();
 	
 	// Solves for the contact forces that satisfy every constrains
-	solver.solve (M_bar_inv_ * tau_star_, M_bar_inv_, n_contact_, full_jac_, full_lamb_);
+	solver.solve (M_bar_inv_ * tau_star_, M_bar_inv_, n_contact_, full_jac_, full_lamb_, all_mu_);
 	
 	// computes the forward dynamics
 	u_ = M_bar_inv_ * (tau_star_ + full_jac_.transpose() * full_lamb_);
 	q_ = pinocchio::integrate(model_, q_, u_ * timeStep_);
+	pinocchio::forwardKinematics(model_, data_, q_, u_);
 }
 
 
@@ -117,7 +135,12 @@ void World::loadUrdf (std::string urdf_path, std::string meshes_path) {
 
 	kp_ = Eigen::VectorXd::Zero(model_.nv);
 	kd_ = Eigen::VectorXd::Zero(model_.nv);
+	tau_ = Eigen::VectorXd::Zero(model_.nv);
 
+	frame_names_.clear();
+	for (auto frame : model_.frames) {
+		frame_names_.push_back(frame.name);
+	}
 }
 
 
@@ -145,6 +168,7 @@ Eigen::VectorXd World::getGeneralizedVelocity () {
 void World::setState (Eigen::VectorXd q, Eigen::VectorXd u) {
 	q_ = q;
 	u_ = u;
+	pinocchio::forwardKinematics(model_, data_, q_, u_);
 }
 boost::python::tuple World::getState () {
 	return boost::python::make_tuple(q_, u_);
@@ -185,6 +209,70 @@ void World::setPdTarget (Eigen::VectorXd q_targ, Eigen::VectorXd u_targ) {
 	u_targ_ = u_targ;
 }
 
+Eigen::MatrixXd World::getPdForce () {
+	dq_ = Eigen::VectorXd::Zero(model_.nv);
+	pinocchio::difference(model_, q_targ_, q_, dq_);
+	return tau_ - dq_.cwiseProduct(kp_) - (u_-u_targ_).cwiseProduct(kd_);
+}
+
+void World::setGeneralizedTorque (Eigen::VectorXd tau) {
+	tau_ = tau;
+}
+
 boost::python::tuple World::getContactInfos () {
-	return boost::python::make_tuple(n_contact_, contact_joint_id_, full_lamb_);
+	Eigen::MatrixXd contact_forces =  full_lamb_ / timeStep_;
+	return boost::python::make_tuple(n_contact_, contact_joint_id_, contact_forces);
+}
+
+void World::setMaterialPairProp (int first_idx, int second_idx, real mu) {
+	std::pair<int, int> p = std::make_pair(first_idx, second_idx);
+	material_pair_props_[p] = mu;
+}
+
+std::vector<std::string>::iterator World::getJointNamesBegin()
+{
+	return model_.names.begin();
+}
+std::vector<std::string>::iterator World::getJointNamesEnd()
+{
+	return model_.names.end();
+}
+
+int World::getJointIdxByName (std::string name) {
+	for (int i(0); i < model_.njoints; i++) {
+		if (model_.names[i] == name) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+std::vector<std::string>::iterator World::getFrameNamesBegin()
+{
+	return frame_names_.begin();
+}
+std::vector<std::string>::iterator World::getFrameNamesEnd()
+{
+	return frame_names_.end();
+}
+
+int World::getFrameIdxByName (std::string name) {
+	for (int i(0); i < model_.nframes; i++) {
+		if (model_.frames[i].name == name) {
+			return i;
+		}
+	}
+	return -1;
+}
+Eigen::Vector3d World::getFramePosition (int idx) {
+	return pinocchio::updateFramePlacement(model_, data_, idx).translation();
+}
+Eigen::Matrix3d World::getFrameOrientation (int idx) {
+	return pinocchio::updateFramePlacement(model_, data_, idx).rotation();
+}
+Eigen::Vector3d World::getFrameVelocity (int idx) {
+	return pinocchio::getFrameVelocity(model_, data_, idx, pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED).linear();
+}
+Eigen::Vector3d World::getFrameAngularVelocity (int idx) {
+	return pinocchio::getFrameVelocity(model_, data_, idx, pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED).angular();
 }

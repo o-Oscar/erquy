@@ -2,7 +2,7 @@ PYTHON_ADD_MODULE(erquy_py binding.cpp)
 
 FILE(COPY visualizer.py DESTINATION .)
 FILE(COPY usage.py DESTINATION .)
-FILE(COPY optim_solver_params.py DESTINATION .)
+FILE(COPY test.py DESTINATION .)
 
 # wierd that I have to do it multiple times
 find_package(pinocchio REQUIRED NO_MODULE)

@@ -1,4 +1,7 @@
 """
+
+export PYTHONPATH=/opt/openrobots/lib/python3.8/site-packages:$PYTHONPATH
+
 py-spy record -o profile.svg --native python3 python/usage.py speed
 file:///home/oscar/workspace/erquy/build/profile.svg
 """

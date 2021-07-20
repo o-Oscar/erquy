@@ -51,10 +51,26 @@ BOOST_PYTHON_MODULE(erquy_py) {
 		.def("enablePd", &erquy::World::enablePd)
 		.def("setPdGains", &erquy::World::setPdGains)
 		.def("setPdTarget", &erquy::World::setPdTarget)
+		.def("getPdForce", &erquy::World::getPdForce)
+
+		.def("setGeneralizedTorque", &erquy::World::setGeneralizedTorque)
+
 
 		.def("getContactInfos", &erquy::World::getContactInfos)
 
-		.def_readonly("solver", & erquy::World::solver)
+		.def("getFrameNames", range(&erquy::World::getFrameNamesBegin, &erquy::World::getFrameNamesEnd))
+		.def("getFrameIdxByName", &erquy::World::getFrameIdxByName)
+		.def("getJointNames", range(&erquy::World::getJointNamesBegin, &erquy::World::getJointNamesEnd))
+		.def("getJointIdxByName", &erquy::World::getJointIdxByName)
+
+		.def("setMaterialPairProp", &erquy::World::setMaterialPairProp)
+
+		.def("getFramePosition", &erquy::World::getFramePosition)
+		.def("getFrameOrientation", &erquy::World::getFrameOrientation)
+		.def("getFrameVelocity", &erquy::World::getFrameVelocity)
+		.def("getFrameAngularVelocity", &erquy::World::getFrameAngularVelocity)
+
+		.def_readonly("solver", &erquy::World::solver)
 	;
 
 	class_<erquy::PgsSolver>("PgsSolver")

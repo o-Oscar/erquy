@@ -4,9 +4,10 @@
 #include <vector>
 #include <bits/stdc++.h>
 
-#define mu 0.5
 
 namespace erquy {
+
+	typedef double real;
 
 
 	class PgsSolver {
@@ -15,18 +16,21 @@ namespace erquy {
 						const Eigen::MatrixXd & M_inv,
 						int n_contact,
 						const Eigen::MatrixXd & full_jac, 
-						Eigen::VectorXd & full_lamb);
+						Eigen::VectorXd & full_lamb,
+						const std::vector<real> & all_mu);
 
 			double step (	const int & n_contact,
 							const Eigen::MatrixXd & D,
 							const Eigen::VectorXd & c,
 							const std::vector<Eigen::Matrix3d> & all_Mi_inv,
 							const std::vector<Eigen::Matrix3d> & all_Mi,
-							Eigen::VectorXd & full_lamb);
+							Eigen::VectorXd & full_lamb,
+							const std::vector<real> & all_mu);
 
 			void step_slipping_contact (const Eigen::Vector3d & ci,
 										const Eigen::Matrix3d & Mi_inv,
-										Eigen::Vector3d & lamb);
+										Eigen::Vector3d & lamb,
+										real & mu);
 			void step_sticking_contact (const Eigen::Vector3d & ci,
 										const Eigen::Matrix3d & Mi_inv,
 										Eigen::Vector3d & lamb_out);
