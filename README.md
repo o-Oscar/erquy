@@ -31,6 +31,8 @@ Erquy is at its core only five files, with less than 700 lines of code total. It
 
 ## Post-it
 
-export PYTHONPATH=/opt/openrobots/lib/python3.8/site-packages:$PYTHONPATH
-export PATH=/opt/openrobots/bin:$PATH
-export PATH=/opt/openrobots/sbin:$PATH
+In order to build and run this project, you need [Pinocchio](https://github.com/stack-of-tasks/pinocchio). For me, some path variables were missing here are what as needed for me to complete the build.
+
+- export PYTHONPATH=/opt/openrobots/lib/python3.8/site-packages:$PYTHONPATH
+- export PATH=/opt/openrobots/bin:$PATH
+- export PATH=/opt/openrobots/sbin:$PATH
