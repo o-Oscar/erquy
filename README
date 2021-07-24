@@ -1,3 +1,6 @@
+# Erquy - A barebone high performance rigid body simulator with minimal python bindings
+
+
 export PYTHONPATH=/opt/openrobots/lib/python3.8/site-packages:$PYTHONPATH
 export PATH=/opt/openrobots/bin:$PATH
 export PATH=/opt/openrobots/sbin:$PATH
