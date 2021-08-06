@@ -10,11 +10,13 @@ import matplotlib.pyplot as plt
 
 import erquy_py
 
-urdf_name = "idefX"
-q = np.asarray([0, 0, 2, 0, 0, 0, 1] + [0, np.pi/4, -np.pi/2] * 4)
-u = np.asarray([0, 0, 0, 0, 0, 0] + [0, 0, 0] * 4)
-kp = np.asarray([0] * 6 + [72] * 12)
-kd = np.asarray([0] * 6 + [7.2] * 12)
+vizualize = True
+
+urdf_name = "collision"
+q = np.asarray([0.37645, 0, 2, 0, 0, 0, 1])
+u = np.asarray([0, 0, 0, 0, 0, 0])
+kp = u*0
+kd = u*0
 q_target = q
 # q_target = np.asarray([0, 0, 1, 0, 0, 0, 1] + [0, 0, 0] * 4)
 u_target = u * 0
@@ -24,16 +26,35 @@ meshes_path = join(dirname(dirname(dirname(str(abspath(__file__))))), "data", ur
 
 world = erquy_py.World()
 world.loadUrdf (urdf_path, meshes_path)
-world.setState(q, u)
+if vizualize:
+	from visualizer import Visualizer
+	viz = Visualizer(urdf_path, meshes_path)
+	viz.update(q)
+	input()
 
-print(world.getState())
-print(list(world.getFrameNames()))
-print(world.getFrameIdxByName("FL_foot"))
-idx = world.getFrameIdxByName("FL_foot")
+# config
+world.setGravity(np.asarray([0, 0, -10]))
+# world.setGravity(np.asarray([0, 0, 0]))
+world.setTimeStep(0.01)
 
-print(world.getFramePosition(idx))
-print(world.getFrameOrientation(idx))
-print(world.getFrameVelocity(idx))
-print(world.getFrameAngularVelocity(idx))
+world.setState (q, u)
+world.setPdGains (kp, kd)
+world.setPdTarget (q, u)
 
-print(world.getContactInfos())
+all_z = []
+
+for i in range(1000):
+	for i in range(10):
+		world.integrate()
+	input()
+	q, u = world.getState()
+	n_contact, contact_joint_id, full_lamb = world.getContactInfos()
+	if n_contact > 0:
+		print(n_contact, contact_joint_id, full_lamb)
+	# print(q, u)
+	all_z.append(q[2])
+	viz.update(q)
+
+
+plt.plot(all_z)
+plt.show()

@@ -60,8 +60,10 @@ namespace erquy {
 			Eigen::MatrixXd getPdForce ();
 
 			void setGeneralizedTorque (Eigen::VectorXd tau);
+			void setMaxTorque (Eigen::VectorXd tau_max);
 
 			boost::python::tuple getContactInfos ();
+			Eigen::MatrixXd computeDistances ();
 			void setMaterialPairProp (int first_idx, int second_idx, real mu);
 
 			std::vector<std::string>::iterator getJointNamesBegin ();
@@ -94,8 +96,12 @@ namespace erquy {
 			Eigen::VectorXd u_;
 			Eigen::VectorXd kp_;
 			Eigen::VectorXd kd_;
+			Eigen::VectorXd cur_kp_;
+			Eigen::VectorXd cur_kd_;
 
 			Eigen::VectorXd tau_;
+			Eigen::VectorXd tau_max_;
+			Eigen::VectorXd cur_pd_tau_;
 
 			Eigen::VectorXd q_targ_;
 			Eigen::VectorXd u_targ_;

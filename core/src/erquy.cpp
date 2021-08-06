@@ -103,19 +103,65 @@ void World::integrate () {
 	// computes the pysical quantities for easy integration
 	dq_ = Eigen::VectorXd::Zero(model_.nv);
 	pinocchio::difference(model_, q_targ_, q_, dq_);
-	tau_star_ =  data_.M * (u_ + timeStep_ * ag_) + timeStep_ * (- h_ + tau_ - dq_.cwiseProduct(kp_) + u_targ_.cwiseProduct(kd_)) ;
-	M_bar_ = data_.M + (timeStep_ * timeStep_ * kp_ + timeStep_ * kd_).asDiagonal().toDenseMatrix();
-	M_bar_inv_ = M_bar_.inverse();
-	
-	// Solves for the contact forces that satisfy every constrains
-	solver.solve (M_bar_inv_ * tau_star_, M_bar_inv_, n_contact_, full_jac_, full_lamb_, all_mu_);
-	
-	// computes the forward dynamics
-	u_ = M_bar_inv_ * (tau_star_ + full_jac_.transpose() * full_lamb_);
-	q_ = pinocchio::integrate(model_, q_, u_ * timeStep_);
+
+
+	bool over_torque = true;
+	cur_kp_ = kp_;
+	cur_kd_ = kd_;
+	// bool* max_torque = new bool [model._nv];
+	// bool* min_torque = new bool [model._nv];
+	cur_pd_tau_ = Eigen::VectorXd::Zero(model_.nv);
+	int deb_test = 0;
+	Eigen::VectorXd new_u_;
+	Eigen::VectorXd new_q_;
+	while (over_torque) {
+		// std::cout << "test n : " << deb_test << std::endl;
+		// std::cout << cur_pd_tau_.transpose() << std::endl;
+		deb_test += 1;
+		tau_star_ =  data_.M * (u_ + timeStep_ * ag_) + timeStep_ * (- h_ + cur_pd_tau_ + tau_ - dq_.cwiseProduct(cur_kp_) + u_targ_.cwiseProduct(cur_kd_)) ;
+		M_bar_ = data_.M + (timeStep_ * timeStep_ * cur_kp_ + timeStep_ * cur_kd_).asDiagonal().toDenseMatrix();
+		M_bar_inv_ = M_bar_.inverse();
+		
+		// Solves for the contact forces that satisfy every constrains
+		solver.solve (M_bar_inv_ * tau_star_, M_bar_inv_, n_contact_, full_jac_, full_lamb_, all_mu_);
+		
+		// computes the forward dynamics
+		new_u_ = M_bar_inv_ * (tau_star_ + full_jac_.transpose() * full_lamb_);
+		new_q_ = pinocchio::integrate(model_, q_, new_u_ * timeStep_);
+
+
+		Eigen::VectorXd new_dq_ = Eigen::VectorXd::Zero(model_.nv);
+		pinocchio::difference(model_, q_targ_, new_q_, new_dq_);
+		Eigen::VectorXd cur_pd_torque =  - new_dq_.cwiseProduct(cur_kp_) - (new_u_-u_targ_).cwiseProduct(cur_kd_);
+
+		over_torque = false;
+		for (int i(0); i < model_.nv; i++) {
+			if (cur_pd_torque[i] > tau_max_[i]) {
+				over_torque = true;
+				cur_pd_tau_[i] = tau_max_[i];
+				cur_kp_[i] = 0;
+				cur_kd_[i] = 0;
+				// std::cout << "high : " << i << std::endl;
+			}
+			if (cur_pd_torque[i] < -tau_max_[i]) {
+				over_torque = true;
+				cur_pd_tau_[i] = -tau_max_[i];
+				cur_kp_[i] = 0;
+				cur_kd_[i] = 0;
+				// std::cout << "low : " << i << std::endl;
+			}
+		}
+		// std::cout << cur_pd_torque.transpose() << std::endl;
+		// std::cout << std::endl;
+
+	}
+
+	q_ = new_q_;
+	u_ = new_u_;
+
+
 	pinocchio::forwardKinematics(model_, data_, q_, u_);
 }
-
 
 
 
@@ -135,7 +181,11 @@ void World::loadUrdf (std::string urdf_path, std::string meshes_path) {
 
 	kp_ = Eigen::VectorXd::Zero(model_.nv);
 	kd_ = Eigen::VectorXd::Zero(model_.nv);
+	cur_kp_ = Eigen::VectorXd::Zero(model_.nv);
+	cur_kd_ = Eigen::VectorXd::Zero(model_.nv);
 	tau_ = Eigen::VectorXd::Zero(model_.nv);
+	tau_max_ = Eigen::VectorXd::Zero(model_.nv);
+	cur_pd_tau_ = Eigen::VectorXd::Zero(model_.nv);
 
 	frame_names_.clear();
 	for (auto frame : model_.frames) {
@@ -202,6 +252,8 @@ void World::enablePd (bool enable_pd) {
 void World::setPdGains (Eigen::VectorXd kp, Eigen::VectorXd kd) {
 	kp_ = kp;
 	kd_ = kd;
+	cur_kp_ = kp;
+	cur_kd_ = kd;
 }
 
 void World::setPdTarget (Eigen::VectorXd q_targ, Eigen::VectorXd u_targ) {
@@ -212,16 +264,33 @@ void World::setPdTarget (Eigen::VectorXd q_targ, Eigen::VectorXd u_targ) {
 Eigen::MatrixXd World::getPdForce () {
 	dq_ = Eigen::VectorXd::Zero(model_.nv);
 	pinocchio::difference(model_, q_targ_, q_, dq_);
-	return tau_ - dq_.cwiseProduct(kp_) - (u_-u_targ_).cwiseProduct(kd_);
+	return tau_ + cur_pd_tau_ - dq_.cwiseProduct(cur_kp_) - (u_-u_targ_).cwiseProduct(cur_kd_);
 }
 
 void World::setGeneralizedTorque (Eigen::VectorXd tau) {
 	tau_ = tau;
 }
 
+void World::setMaxTorque (Eigen::VectorXd tau_max) {
+	tau_max_ = tau_max;
+}
+
 boost::python::tuple World::getContactInfos () {
 	Eigen::MatrixXd contact_forces =  full_lamb_ / timeStep_;
 	return boost::python::make_tuple(n_contact_, contact_joint_id_, contact_forces);
+}
+
+Eigen::MatrixXd World::computeDistances () {
+	pinocchio::computeDistances(model_, data_, geom_model_, geom_data_, q_);
+	Eigen::MatrixXd toReturn = Eigen::MatrixXd::Zero(geom_data_.distanceResults.size(), 9);;
+	for (int i(0); i < geom_data_.distanceResults.size(); i++) {
+		hpp::fcl::DistanceResult dr = geom_data_.distanceResults[i];
+		// std::cout << i << " : " << dr.nearest_points[0].transpose() << ", " << dr.nearest_points[1].transpose() << ", " << dr.normal.transpose() << std::endl;
+		toReturn.block<1,3>(i, 0) = dr.nearest_points[0];
+		toReturn.block<1,3>(i, 3) = dr.nearest_points[1];
+		toReturn.block<1,3>(i, 6) = dr.normal;
+	}
+	return toReturn;
 }
 
 void World::setMaterialPairProp (int first_idx, int second_idx, real mu) {

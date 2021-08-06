@@ -54,9 +54,12 @@ BOOST_PYTHON_MODULE(erquy_py) {
 		.def("getPdForce", &erquy::World::getPdForce)
 
 		.def("setGeneralizedTorque", &erquy::World::setGeneralizedTorque)
+		.def("setMaxTorque", &erquy::World::setMaxTorque)
+
 
 
 		.def("getContactInfos", &erquy::World::getContactInfos)
+		.def("computeDistances", &erquy::World::computeDistances)
 
 		.def("getFrameNames", range(&erquy::World::getFrameNamesBegin, &erquy::World::getFrameNamesEnd))
 		.def("getFrameIdxByName", &erquy::World::getFrameIdxByName)
